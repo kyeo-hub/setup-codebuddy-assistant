@@ -23,27 +23,75 @@
 
 ## 快速开始
 
-### 1. 安装 CodeBuddy
+### 0. 前置准备
 
 ```bash
+# 安装 CodeBuddy
 npm install -g @tencent-ai/codebuddy-code
 codebuddy
 # 在 CodeBuddy 中执行 /login 完成登录
+
+# 获取企微 Bot 凭据
+# 登录企业微信管理后台 → 应用管理 → 智能机器人 → 复制 Bot ID 和 Bot Secret
 ```
 
-### 2. 获取企微 Bot 凭据
+### 1. 一键启动（curl | bash）
 
-1. 登录 [企业微信管理后台](https://work.weixin.qq.com/wework_admin/frame)
-2. 进入「应用管理」→ 创建或选择智能机器人
-3. 复制 **Bot ID** 和 **Bot Secret**
+不留本地文件，直接远程执行。国内环境需加代理：
 
-### 3. 一键配置
+```bash
+# 国内环境（通过 ghfast 代理）
+bash <(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main/setup-codebuddy-assistant.sh)
+
+# 国际环境（直连）
+bash <(curl -fsSL https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main/setup-codebuddy-assistant.sh)
+
+# 自定义代理
+bash <(curl -fsSLx http://your-proxy:port https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main/setup-codebuddy-assistant.sh)
+```
+
+### 2. 一键启动（SSH + tmux 后台模式）
+
+SSH 连接服务器后，用 tmux 保持会话，断开 SSH 后 CodeBuddy 继续运行：
+
+```bash
+# 一行搞定：SSH 连接 + tmux 会话 + 脚本执行
+ssh user@your-server -t "tmux new-session -A -s cbc 'bash <(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main/setup-codebuddy-assistant.sh)'"
+
+# 或者 SSH 上去后手动操作
+tmux new-session -s cbc
+bash <(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main/setup-codebuddy-assistant.sh)
+# 配置完成后，连接企微 → 按 Ctrl+B 然后按 D 脱离 tmux（CodeBuddy 继续后台运行）
+# 下次重新连接：tmux attach -t cbc
+```
+
+### 3. 一键启动（非 root 用户）
+
+非 root 用户使用 `systemctl --user` 管理服务：
+
+```bash
+# 国内环境
+bash <(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main/setup-codebuddy-assistant.sh)
+
+# 服务管理命令（注意 --user）
+systemctl --user start codebuddy
+systemctl --user stop codebuddy
+systemctl --user status codebuddy
+journalctl --user -u codebuddy -f
+
+# 确保注销后服务继续运行
+loginctl enable-linger $(whoami)
+```
+
+### 4. 克隆到本地执行
 
 ```bash
 git clone git@github.com:kyeo-hub/setup-codebuddy-assistant.git
 cd setup-codebuddy-assistant
 bash setup-codebuddy-assistant.sh
 ```
+
+### 配置流程
 
 脚本会交互式引导你完成以下配置：
 
@@ -54,18 +102,6 @@ bash setup-codebuddy-assistant.sh
 | Step 3 | 启用 Auto Memory + Typed Memory |
 | Step 4 | 创建 systemd 后台常驻服务 |
 | Step 5 | 安装 /init-setup Skill（后续交互式调整配置） |
-
-### 4. 启动服务
-
-```bash
-sudo systemctl start codebuddy
-```
-
-### 5. 连接企微
-
-服务启动后会打开 `/remote-control` 面板，选择 `wecom-bot` 连接。之后就可以在企微里直接对话了。
-
-> 如果你是 SSH 远程操作，建议先通过 `tmux` 或 `screen` 连接，再启动服务进行交互式选择。
 
 ## 配置文件说明
 
@@ -162,9 +198,8 @@ sudo systemctl restart codebuddy
 ## 新设备快速复用
 
 ```bash
-git clone git@github.com:kyeo-hub/setup-codebuddy-assistant.git
-cd setup-codebuddy-assistant
-bash setup-codebuddy-assistant.sh
+# 一行命令，不留本地
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main/setup-codebuddy-assistant.sh | bash
 ```
 
 ## 常见问题
