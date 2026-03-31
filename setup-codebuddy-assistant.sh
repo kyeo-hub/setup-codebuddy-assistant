@@ -33,9 +33,16 @@ if ! command -v codebuddy &>/dev/null; then
 fi
 
 CODEBUDDY_BIN=$(which codebuddy)
+CODEBUDDY_BIN=$(readlink -f "$CODEBUDDY_BIN" 2>/dev/null || echo "$CODEBUDDY_BIN")
 CODEBUDDY_VERSION=$(codebuddy --version 2>/dev/null | head -1 || echo "unknown")
 info "CodeBuddy 路径: ${CODEBUDDY_BIN}"
 info "CodeBuddy 版本: ${CODEBUDDY_VERSION}"
+
+# 确认 HOME 目录存在
+if [[ ! -d "$HOME" ]]; then
+    mkdir -p "$HOME"
+    info "已创建 HOME 目录: ${HOME}"
+fi
 
 CONFIG_DIR="$HOME/.codebuddy"
 mkdir -p "$CONFIG_DIR/rules" "$CONFIG_DIR/skills/init-setup" "$CONFIG_DIR/memories/global"
@@ -70,6 +77,7 @@ else
         # 移除旧的配置行，避免重复
         sed -i '/^export CODEBUDDY_WECOM_BOT_ID=/d' "$SHELL_RC"
         sed -i '/^export CODEBUDDY_WECOM_BOT_SECRET=/d' "$SHELL_RC"
+        sed -i '/^# CodeBuddy WeChat Work Bot$/d' "$SHELL_RC"
         echo "" >> "$SHELL_RC"
         echo "# CodeBuddy WeChat Work Bot" >> "$SHELL_RC"
         echo "export CODEBUDDY_WECOM_BOT_ID=\"${BOT_ID}\"" >> "$SHELL_RC"
@@ -201,11 +209,22 @@ fi
 read -rp "工作目录（CodeBuddy 运行目录）[默认: ${HOME}]: " WORK_DIR
 WORK_DIR=${WORK_DIR:-$HOME}
 
+# 确保 WorkingDirectory 存在
+if [[ ! -d "$WORK_DIR" ]]; then
+    info "工作目录不存在，自动创建: ${WORK_DIR}"
+    mkdir -p "$WORK_DIR" || { error "无法创建工作目录: ${WORK_DIR}"; }
+fi
+
 read -rp "是否创建 systemd 后台服务？[Y/n]: " CREATE_SERVICE
 CREATE_SERVICE=${CREATE_SERVICE:-Y}
 
 if [[ "$CREATE_SERVICE" == "y" || "$CREATE_SERVICE" == "Y" ]]; then
-    NODE_BIN=$(dirname "$(readlink -f "$(which node)" 2>/dev/null || echo "$(which node)")")
+    # 解析 node 真实路径（兼容 nvm、fnm 等版本管理器）
+    NODE_BIN=""
+    NODE_REAL=$(readlink -f "$(which node)" 2>/dev/null || echo "")
+    if [[ -n "$NODE_REAL" ]]; then
+        NODE_BIN=$(dirname "$NODE_REAL")
+    fi
     NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
     if [[ "$IS_ROOT" == "true" ]]; then
@@ -235,7 +254,20 @@ EOF
 
         systemctl daemon-reload
         systemctl enable "${SERVICE_NAME}"
-        systemctl restart "${SERVICE_NAME}" || warn "服务启动失败，请检查 journalctl -u ${SERVICE_NAME}"
+        # 先测试服务配置是否合法
+        if systemctl start "${SERVICE_NAME}" 2>/dev/null; then
+            info "服务启动成功"
+        else
+            JOURNAL=$(journalctl -u "${SERVICE_NAME}" --no-pager -n 10 2>/dev/null)
+            warn "服务启动失败，尝试排查..."
+            echo "$JOURNAL" | tail -5
+            # 常见修复：如果路径含 nvm，尝试用 node 绝对路径
+            if [[ "$CODEBUDDY_BIN" == *"/.nvm/"* ]]; then
+                warn "检测到 nvm 环境，systemd 可能无法加载 nvm 路径"
+                warn "建议将 ExecStart 中的 codebuddy 替换为绝对路径: ${CODEBUDDY_BIN}"
+                warn "服务文件: ${SERVICE_FILE}"
+            fi
+        fi
         info "systemd 服务已创建并启用"
         info "  启动: systemctl start ${SERVICE_NAME}"
         info "  停止: systemctl stop ${SERVICE_NAME}"
@@ -262,7 +294,13 @@ EOF
 
         systemctl --user daemon-reload
         systemctl --user enable "${SERVICE_NAME}"
-        systemctl --user start "${SERVICE_NAME}" || warn "服务启动失败，请检查 journalctl --user -u ${SERVICE_NAME}"
+        if systemctl --user start "${SERVICE_NAME}" 2>/dev/null; then
+            info "服务启动成功"
+        else
+            JOURNAL=$(journalctl --user -u "${SERVICE_NAME}" --no-pager -n 10 2>/dev/null)
+            warn "服务启动失败"
+            echo "$JOURNAL" | tail -5
+        fi
         info "用户级 systemd 服务已创建并启用"
         info "  启动: systemctl --user start ${SERVICE_NAME}"
         info "  停止: systemctl --user stop ${SERVICE_NAME}"
