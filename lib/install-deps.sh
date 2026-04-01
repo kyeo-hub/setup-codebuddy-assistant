@@ -25,7 +25,9 @@ install_node() {
 _do_install_node() {
     local pkg_manager=""
 
-    if command -v apt-get &>/dev/null; then
+    if command -v pkg &>/dev/null; then
+        pkg_manager="pkg"
+    elif command -v apt-get &>/dev/null; then
         pkg_manager="apt"
     elif command -v yum &>/dev/null; then
         pkg_manager="yum"
@@ -36,6 +38,9 @@ _do_install_node() {
     fi
 
     case "$pkg_manager" in
+        pkg)
+            pkg install -y nodejs npm || error "Node.js 安装失败（pkg）"
+            ;;
         apt)
             curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - 2>/dev/null \
                 && sudo apt-get install -y nodejs \
@@ -66,7 +71,9 @@ install_tmux() {
     fi
 
     info "tmux 未安装，开始安装..."
-    if command -v apt-get &>/dev/null; then
+    if command -v pkg &>/dev/null; then
+        pkg install -y tmux || error "tmux 安装失败（pkg）"
+    elif command -v apt-get &>/dev/null; then
         sudo apt-get install -y tmux || error "tmux 安装失败（apt）"
     elif command -v yum &>/dev/null; then
         sudo yum install -y tmux || error "tmux 安装失败（yum）"

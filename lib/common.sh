@@ -39,8 +39,13 @@ detect_shell_rc() {
         echo "$HOME/.zshrc"
     elif [[ -f "$HOME/.bashrc" ]]; then
         echo "$HOME/.bashrc"
+    elif [[ -f "$HOME/.bash_profile" ]]; then
+        echo "$HOME/.bash_profile"
+    elif [[ -f "$HOME/.profile" ]]; then
+        echo "$HOME/.profile"
     else
-        echo ""
+        # termux 可能没有这些文件，默认写入 ~/.profile
+        echo "$HOME/.profile"
     fi
 }
 
