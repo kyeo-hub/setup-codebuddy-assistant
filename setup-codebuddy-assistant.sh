@@ -134,9 +134,9 @@ SESSION="codebuddy"
 tmux kill-session -t "\$SESSION" 2>/dev/null
 tmux new-session -d -s "\$SESSION" "${CODEBUDDY_BIN}"
 sleep 8
-tmux send-keys "/remote-control" Enter -t "\$SESSION"
+tmux send-keys -t "\$SESSION" "/remote-control" Enter
 sleep 3
-tmux send-keys Enter -t "\$SESSION"
+tmux send-keys -t "\$SESSION" Enter
 trap 'tmux kill-session -t "\$SESSION" 2>/dev/null; exit 0' TERM INT
 while tmux has-session -t "\$SESSION" 2>/dev/null; do
     sleep 5
@@ -381,13 +381,13 @@ tmux new-session -d -s "\$SESSION" "${CODEBUDDY_BIN}"
 sleep 8
 
 # 模拟用户输入 /remote-control 命令（触发真正的 slash 命令处理器）
-tmux send-keys "/remote-control" Enter -t "\$SESSION"
+tmux send-keys -t "\$SESSION" "/remote-control" Enter
 
 # 等待交互面板加载
 sleep 3
 
 # 发送 Enter 键，选择并连接 wecom-bot
-tmux send-keys Enter -t "\$SESSION"
+tmux send-keys -t "\$SESSION" Enter
 
 # 收到 SIGTERM 时清理 tmux 会话并退出
 trap 'tmux kill-session -t "\$SESSION" 2>/dev/null; exit 0' TERM INT
