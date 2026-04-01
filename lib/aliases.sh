@@ -27,8 +27,19 @@ setup_aliases() {
 
 # CodeBuddy tmux aliases
 cbc() {
+    if ! command -v codebuddy &>/dev/null; then
+        echo "[ERROR] 未检测到 codebuddy 可执行文件，请先安装或确保 PATH 中有 codebuddy"
+        return 1
+    fi
+
     if tmux has-session -t codebuddy 2>/dev/null; then
-        tmux attach -t codebuddy
+        # 如果已存在会话，检测是否已有 codebuddy 进程
+        if tmux list-panes -t codebuddy -F '#{pane_current_command}' | grep -qi '^codebuddy$'; then
+            tmux attach -t codebuddy
+        else
+            tmux kill-session -t codebuddy
+            tmux new-session -s codebuddy codebuddy \; bind-key -n F12 detach
+        fi
     else
         tmux new-session -s codebuddy codebuddy \; bind-key -n F12 detach
     fi
