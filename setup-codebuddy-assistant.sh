@@ -232,20 +232,27 @@ if [[ "$CREATE_SERVICE" == "y" || "$CREATE_SERVICE" == "Y" ]]; then
     cat > "$WRAPPER_SCRIPT" << WRAPPER_EOF
 #!/bin/bash
 # CodeBuddy 企业微信机器人自动连接 wrapper
-# 通过 tmux 提供伪终端，自动在 /remote-control 面板中连接 wecom-bot
+# -c 参数会把内容当聊天消息发给 AI，无法触发 slash 命令
+# 因此直接启动交互模式，通过 send-keys 模拟用户输入
 
 SESSION="codebuddy"
 
 # 清理可能残留的 tmux 会话
 tmux kill-session -t "\$SESSION" 2>/dev/null
 
-# 在 tmux 中启动 codebuddy（/remote-control 打开交互面板）
-tmux new-session -d -s "\$SESSION" "${CODEBUDDY_BIN} -c '/remote-control'"
+# 在 tmux 中启动 codebuddy 交互模式（不用 -c）
+tmux new-session -d -s "\$SESSION" "${CODEBUDDY_BIN}"
 
-# 等待面板加载
-sleep 5
+# 等待 codebuddy 初始化完成
+sleep 8
 
-# 发送 Enter 键，自动选择并连接 wecom-bot
+# 模拟用户输入 /remote-control 命令（触发真正的 slash 命令处理器）
+tmux send-keys "/remote-control" Enter -t "\$SESSION"
+
+# 等待交互面板加载
+sleep 3
+
+# 发送 Enter 键，选择并连接 wecom-bot
 tmux send-keys Enter -t "\$SESSION"
 
 # 收到 SIGTERM 时清理 tmux 会话并退出
