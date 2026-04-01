@@ -120,48 +120,94 @@ case "$MODE" in
         echo -e "${CYAN}║   CodeBuddy 个人助理配置                   ║${NC}"
         echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
 
-        check_system
-        echo ""
-
-        # 交互式安装依赖
-        if confirm "是否检查并安装缺失的依赖？" "Y"; then
-            install_deps
-        fi
-
-        # 安装 CodeBuddy
-        install_codebuddy
-        echo ""
-
-        # 配置
-        config_all
-        echo ""
-
-        # 别名
-        setup_aliases
-        echo ""
-
-        # Skill
-        setup_skill
-        echo ""
-
-        # 备份标记
-        set_installed_version "$(date +%Y%m%d-%H%M%S)"
-
-        # 完成提示
-        shell_rc=$(detect_shell_rc)
-        echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
-        echo -e "${GREEN}║     配置完成!                            ║${NC}"
-        echo -e "${GREEN}╠══════════════════════════════════════════╣${NC}"
-        echo -e "${GREEN}║  cbc         启动/连接 CodeBuddy          ║${NC}"
-        echo -e "${GREEN}║  cbc-stop    关闭 CodeBuddy              ║${NC}"
-        echo -e "${GREEN}║  F12         脱离 tmux                   ║${NC}"
-        echo -e "${GREEN}║  /remote-control  连接企微              ║${NC}"
-        echo -e "${GREEN}║  /init-setup 交互式调整配置              ║${NC}"
-        echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
-
-        if [[ -n "$shell_rc" ]]; then
+        # 交互菜单
+        while true; do
             echo ""
-            info "请执行: source ${shell_rc}"
-        fi
+            echo "请选择要执行的操作（可多选，用空格分隔）:"
+            echo "  1) 检查系统环境"
+            echo "  2) 安装系统依赖（Node.js、tmux）"
+            echo "  3) 安装 CodeBuddy CLI"
+            echo "  4) 配置环境变量和身份设定"
+            echo "  5) 设置 tmux 快捷别名"
+            echo "  6) 安装 /init-setup Skill"
+            echo "  7) 全部执行"
+            echo "  0) 退出"
+            echo ""
+            read -rp "请输入选项 [7]: " choices
+            choices="${choices:-7}"
+
+            if [[ "$choices" == "0" ]]; then
+                info "已退出"
+                exit 0
+            fi
+
+            # 解析选择
+            declare -A selected
+            for choice in $choices; do
+                selected[$choice]=1
+            done
+
+            # 执行选择
+            if [[ ${selected[1]} || ${selected[7]} ]]; then
+                check_system
+                echo ""
+            fi
+
+            if [[ ${selected[2]} || ${selected[7]} ]]; then
+                install_deps
+                echo ""
+            fi
+
+            if [[ ${selected[3]} || ${selected[7]} ]]; then
+                install_codebuddy
+                echo ""
+            fi
+
+            if [[ ${selected[4]} || ${selected[7]} ]]; then
+                config_all
+                echo ""
+            fi
+
+            if [[ ${selected[5]} || ${selected[7]} ]]; then
+                setup_aliases
+                echo ""
+            fi
+
+            if [[ ${selected[6]} || ${selected[7]} ]]; then
+                setup_skill
+                echo ""
+            fi
+
+            # 备份标记（如果执行了安装或配置）
+            if [[ ${selected[3]} || ${selected[4]} || ${selected[5]} || ${selected[6]} || ${selected[7]} ]]; then
+                set_installed_version "$(date +%Y%m%d-%H%M%S)"
+            fi
+
+            # 完成提示
+            if [[ ${selected[7]} ]]; then
+                shell_rc=$(detect_shell_rc)
+                echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
+                echo -e "${GREEN}║     配置完成!                            ║${NC}"
+                echo -e "${GREEN}╠══════════════════════════════════════════╣${NC}"
+                echo -e "${GREEN}║  cbc         启动/连接 CodeBuddy          ║${NC}"
+                echo -e "${GREEN}║  cbc-stop    关闭 CodeBuddy              ║${NC}"
+                echo -e "${GREEN}║  F12         脱离 tmux                   ║${NC}"
+                echo -e "${GREEN}║  /remote-control  连接企微              ║${NC}"
+                echo -e "${GREEN}║  /init-setup 交互式调整配置              ║${NC}"
+                echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
+
+                if [[ -n "$shell_rc" ]]; then
+                    echo ""
+                    info "请执行: source ${shell_rc}"
+                fi
+                break
+            else
+                if confirm "是否继续选择其他操作？" "N"; then
+                    continue
+                else
+                    break
+                fi
+            fi
+        done
         ;;
 esac
