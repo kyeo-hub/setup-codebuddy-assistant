@@ -38,44 +38,48 @@ die()     { echo -e "${RED}配置中断，请重新运行脚本。${NC}"; exit 1
 if [[ "$MODE" == "uninstall" ]]; then
     info "开始卸载 CodeBuddy 服务..."
 
+    info "开始卸载 CodeBuddy 配置..."
+
+    # 停止并删除 systemd 服务（兼容旧版本安装）
     SERVICE_NAME="codebuddy"
-    WRAPPER_SCRIPT="/usr/local/bin/codebuddy-wecom-wrapper.sh"
-
-    # 停止并删除 systemd 服务
-    if [[ "$(id -u)" -eq 0 ]]; then
-        SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-        if [[ -f "$SERVICE_FILE" ]]; then
-            systemctl stop "${SERVICE_NAME}" 2>/dev/null
-            systemctl disable "${SERVICE_NAME}" 2>/dev/null
-            rm -f "$SERVICE_FILE"
-            systemctl daemon-reload
-            info "已删除 systemd 服务: ${SERVICE_FILE}"
-        else
-            warn "未找到 systemd 服务文件"
+    for SF in "/etc/systemd/system/${SERVICE_NAME}.service" "$HOME/.config/systemd/user/${SERVICE_NAME}.service"; do
+        if [[ -f "$SF" ]]; then
+            if [[ "$(id -u)" -eq 0 ]]; then
+                systemctl stop "${SERVICE_NAME}" 2>/dev/null
+                systemctl disable "${SERVICE_NAME}" 2>/dev/null
+            else
+                systemctl --user stop "${SERVICE_NAME}" 2>/dev/null
+                systemctl --user disable "${SERVICE_NAME}" 2>/dev/null
+            fi
+            rm -f "$SF"
+            if [[ "$(id -u)" -eq 0 ]]; then
+                systemctl daemon-reload
+            else
+                systemctl --user daemon-reload
+            fi
+            info "已删除 systemd 服务: ${SF}"
         fi
-    else
-        SERVICE_FILE="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
-        if [[ -f "$SERVICE_FILE" ]]; then
-            systemctl --user stop "${SERVICE_NAME}" 2>/dev/null
-            systemctl --user disable "${SERVICE_NAME}" 2>/dev/null
-            rm -f "$SERVICE_FILE"
-            systemctl --user daemon-reload
-            info "已删除用户级 systemd 服务: ${SERVICE_FILE}"
-        else
-            warn "未找到用户级 systemd 服务文件"
-        fi
-    fi
+    done
 
-    # 清理 wrapper 脚本
-    if [[ -f "$WRAPPER_SCRIPT" ]]; then
-        rm -f "$WRAPPER_SCRIPT"
-        info "已删除 wrapper 脚本: ${WRAPPER_SCRIPT}"
+    # 清理 wrapper 脚本（兼容旧版本）
+    if [[ -f "/usr/local/bin/codebuddy-wecom-wrapper.sh" ]]; then
+        rm -f "/usr/local/bin/codebuddy-wecom-wrapper.sh"
+        info "已删除 wrapper 脚本"
     fi
 
     # 清理 tmux 会话
     tmux kill-session -t codebuddy 2>/dev/null && info "已清理 tmux 会话" || true
 
-    # 提示手动清理项
+    # 清理 shell 配置文件中的别名
+    for RC in "$HOME/.zshrc" "$HOME/.bashrc"; do
+        if [[ -f "$RC" ]]; then
+            sed -i '/^# CodeBuddy tmux aliases$/d' "$RC"
+            sed -i '/^cbc() {$/,/^}$/d' "$RC"
+            sed -i '/^cbc-stop() {$/,/^}$/d' "$RC"
+            info "已清理 ${RC} 中的别名"
+        fi
+    done
+
     echo ""
     info "卸载完成。以下配置保留未删（如需清理请手动操作）："
     echo "  - ~/.codebuddy/          (身份设定、记忆、Skill 等)"
@@ -86,71 +90,64 @@ fi
 
 # ========== 更新模式 ==========
 if [[ "$MODE" == "update" ]]; then
-    if ! command -v codebuddy &>/dev/null; then
-        error "未找到 codebuddy，请先安装 CodeBuddy Code"
-    fi
-    if ! command -v tmux &>/dev/null; then
-        error "未找到 tmux，请先安装: apt install -y tmux 或 yum install -y tmux"
+    info "更新 tmux 别名..."
+
+    SHELL_RC=""
+    if [[ -f "$HOME/.zshrc" ]]; then
+        SHELL_RC="$HOME/.zshrc"
+    elif [[ -f "$HOME/.bashrc" ]]; then
+        SHELL_RC="$HOME/.bashrc"
     fi
 
-    CODEBUDDY_BIN=$(which codebuddy)
-    CODEBUDDY_BIN=$(readlink -f "$CODEBUDDY_BIN" 2>/dev/null || echo "$CODEBUDDY_BIN")
+    if [[ -n "$SHELL_RC" ]]; then
+        sed -i '/^# CodeBuddy tmux aliases$/d' "$SHELL_RC"
+        sed -i '/^cbc() {$/,/^}$/d' "$SHELL_RC"
+        sed -i '/^cbc-stop() {$/,/^}$/d' "$SHELL_RC"
+        cat >> "$SHELL_RC" << 'ALIAS_EOF'
 
+# CodeBuddy tmux aliases
+cbc() {
+    if tmux has-session -t codebuddy 2>/dev/null; then
+        tmux attach -t codebuddy
+    else
+        tmux new-session -s codebuddy codebuddy
+    fi
+}
+cbc-stop() {
+    tmux kill-session -t codebuddy 2>/dev/null && echo "CodeBuddy 会话已关闭" || echo "没有运行中的 CodeBuddy 会话"
+}
+ALIAS_EOF
+        info "已更新 ${SHELL_RC} 中的别名"
+    else
+        warn "未找到 .bashrc 或 .zshrc"
+    fi
+
+    # 兼容旧版本：清理 systemd 服务和 wrapper
     SERVICE_NAME="codebuddy"
-    WRAPPER_SCRIPT="/usr/local/bin/codebuddy-wecom-wrapper.sh"
-
-    # 读取现有环境变量
-    if [[ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]]; then
-        BOT_ID=$(grep '^Environment=CODEBUDDY_WECOM_BOT_ID=' /etc/systemd/system/${SERVICE_NAME}.service | sed 's/.*=//')
-        BOT_SECRET=$(grep '^Environment=CODEBUDDY_WECOM_BOT_SECRET=' /etc/systemd/system/${SERVICE_NAME}.service | sed 's/.*=//')
-    elif [[ -f "$HOME/.config/systemd/user/${SERVICE_NAME}.service" ]]; then
-        BOT_ID=$(grep '^Environment=CODEBUDDY_WECOM_BOT_ID=' "$HOME/.config/systemd/user/${SERVICE_NAME}.service" | sed 's/.*=//')
-        BOT_SECRET=$(grep '^Environment=CODEBUDDY_WECOM_BOT_SECRET=' "$HOME/.config/systemd/user/${SERVICE_NAME}.service" | sed 's/.*=//')
+    for SF in "/etc/systemd/system/${SERVICE_NAME}.service" "$HOME/.config/systemd/user/${SERVICE_NAME}.service"; do
+        if [[ -f "$SF" ]]; then
+            if [[ "$(id -u)" -eq 0 ]]; then
+                systemctl stop "${SERVICE_NAME}" 2>/dev/null
+                systemctl disable "${SERVICE_NAME}" 2>/dev/null
+            else
+                systemctl --user stop "${SERVICE_NAME}" 2>/dev/null
+                systemctl --user disable "${SERVICE_NAME}" 2>/dev/null
+            fi
+            rm -f "$SF"
+            if [[ "$(id -u)" -eq 0 ]]; then
+                systemctl daemon-reload
+            else
+                systemctl --user daemon-reload
+            fi
+            info "已清理旧版 systemd 服务: ${SF}"
+        fi
+    done
+    if [[ -f "/usr/local/bin/codebuddy-wecom-wrapper.sh" ]]; then
+        rm -f "/usr/local/bin/codebuddy-wecom-wrapper.sh"
+        info "已清理旧版 wrapper 脚本"
     fi
-    BOT_ID=${BOT_ID:-${CODEBUDDY_WECOM_BOT_ID:-}}
-    BOT_SECRET=${BOT_SECRET:-${CODEBUDDY_WECOM_BOT_SECRET:-}}
 
-    if [[ -z "$BOT_ID" || -z "$BOT_SECRET" ]]; then
-        warn "未找到企微 Bot 凭据，wrapper 将使用环境变量"
-    fi
-
-    # 停止服务
-    if [[ "$(id -u)" -eq 0 ]]; then
-        systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
-    else
-        systemctl --user stop "${SERVICE_NAME}" 2>/dev/null || true
-    fi
-    tmux kill-session -t codebuddy 2>/dev/null || true
-
-    # 重新生成 wrapper 脚本
-    cat > "$WRAPPER_SCRIPT" << WRAPPER_EOF
-#!/bin/bash
-# CodeBuddy 企业微信机器人自动连接 wrapper
-# -c 参数会把内容当聊天消息发给 AI，无法触发 slash 命令
-# 因此直接启动交互模式，通过 send-keys 模拟用户输入
-
-SESSION="codebuddy"
-
-tmux kill-session -t "\$SESSION" 2>/dev/null
-tmux new-session -d -s "\$SESSION" "${CODEBUDDY_BIN}"
-sleep 8
-tmux send-keys -t "\$SESSION" "/remote-control" Enter
-sleep 3
-tmux send-keys -t "\$SESSION" Enter
-trap 'tmux kill-session -t "\$SESSION" 2>/dev/null; exit 0' TERM INT
-while tmux has-session -t "\$SESSION" 2>/dev/null; do
-    sleep 5
-done
-WRAPPER_EOF
-    chmod +x "$WRAPPER_SCRIPT"
-    info "已更新 wrapper 脚本: ${WRAPPER_SCRIPT}"
-
-    # 重启服务
-    if [[ "$(id -u)" -eq 0 ]]; then
-        systemctl start "${SERVICE_NAME}" 2>/dev/null && info "服务已重启" || warn "服务启动失败，请检查 journalctl -u ${SERVICE_NAME} -f"
-    else
-        systemctl --user start "${SERVICE_NAME}" 2>/dev/null && info "服务已重启" || warn "服务启动失败，请检查 journalctl --user -u ${SERVICE_NAME} -f"
-    fi
+    info "更新完成！执行 source ${SHELL_RC:-~/.bashrc} 使别名生效"
     exit 0
 fi
 
@@ -321,171 +318,48 @@ console.log(JSON.stringify(settings, null, 2));
 info "已启用: Auto Memory + Typed Memory"
 info "语言偏好: ${REPLY_LANG:-简体中文}"
 
-# ========== Step 4: 后台服务 (systemd) ==========
+# ========== Step 4: tmux 快捷启动别名 ==========
 echo ""
-echo -e "${CYAN}━━━ Step 4/5: 后台常驻服务 ━━━${NC}"
+echo -e "${CYAN}━━━ Step 4/5: tmux 快捷启动别名 ━━━${NC}"
 
-if [[ "$(id -u)" -eq 0 ]]; then
-    IS_ROOT=true
-else
-    IS_ROOT=false
-    warn "当前非 root 用户，systemd 服务将以当前用户创建（systemctl --user）"
+# 检测 shell 配置文件
+SHELL_RC=""
+if [[ -f "$HOME/.zshrc" ]]; then
+    SHELL_RC="$HOME/.zshrc"
+elif [[ -f "$HOME/.bashrc" ]]; then
+    SHELL_RC="$HOME/.bashrc"
 fi
 
-SERVICE_NAME="codebuddy"
-if [[ "$IS_ROOT" == "true" ]]; then
-    SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-else
-    SERVICE_FILE="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
-    mkdir -p "$(dirname "$SERVICE_FILE")"
-fi
+if [[ -n "$SHELL_RC" ]]; then
+    # 移除旧的别名，避免重复
+    sed -i '/^# CodeBuddy tmux aliases$/d' "$SHELL_RC"
+    sed -i '/^cbc() {$/,/^}$/d' "$SHELL_RC"
+    sed -i '/^cbc-stop() {$/,/^}$/d' "$SHELL_RC"
 
-read -rp "工作目录（CodeBuddy 运行目录）[默认: ${HOME}]: " WORK_DIR
-WORK_DIR=${WORK_DIR:-$HOME}
+    cat >> "$SHELL_RC" << 'ALIAS_EOF'
 
-# 确保 WorkingDirectory 存在
-if [[ ! -d "$WORK_DIR" ]]; then
-    info "工作目录不存在，自动创建: ${WORK_DIR}"
-    mkdir -p "$WORK_DIR" || { error "无法创建工作目录: ${WORK_DIR}"; }
-fi
-
-read -rp "是否创建 systemd 后台服务？[Y/n]: " CREATE_SERVICE
-CREATE_SERVICE=${CREATE_SERVICE:-Y}
-
-if [[ "$CREATE_SERVICE" == "y" || "$CREATE_SERVICE" == "Y" ]]; then
-    # 解析 node 真实路径（兼容 nvm、fnm 等版本管理器）
-    NODE_BIN=""
-    NODE_REAL=$(readlink -f "$(which node)" 2>/dev/null || echo "")
-    if [[ -n "$NODE_REAL" ]]; then
-        NODE_BIN=$(dirname "$NODE_REAL")
-    fi
-    NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-
-    # 生成 wrapper 脚本（通过 tmux + send-keys 自动连接企微机器人）
-    WRAPPER_SCRIPT="/usr/local/bin/codebuddy-wecom-wrapper.sh"
-    cat > "$WRAPPER_SCRIPT" << WRAPPER_EOF
-#!/bin/bash
-# CodeBuddy 企业微信机器人自动连接 wrapper
-# -c 参数会把内容当聊天消息发给 AI，无法触发 slash 命令
-# 因此直接启动交互模式，通过 send-keys 模拟用户输入
-
-SESSION="codebuddy"
-
-# 清理可能残留的 tmux 会话
-tmux kill-session -t "\$SESSION" 2>/dev/null
-
-# 在 tmux 中启动 codebuddy 交互模式（不用 -c）
-tmux new-session -d -s "\$SESSION" "${CODEBUDDY_BIN}"
-
-# 等待 codebuddy 初始化完成
-sleep 8
-
-# 模拟用户输入 /remote-control 命令（触发真正的 slash 命令处理器）
-tmux send-keys -t "\$SESSION" "/remote-control" Enter
-
-# 等待交互面板加载
-sleep 3
-
-# 发送 Enter 键，选择并连接 wecom-bot
-tmux send-keys -t "\$SESSION" Enter
-
-# 收到 SIGTERM 时清理 tmux 会话并退出
-trap 'tmux kill-session -t "\$SESSION" 2>/dev/null; exit 0' TERM INT
-
-# 保持 wrapper 运行，等待 tmux 会话结束
-while tmux has-session -t "\$SESSION" 2>/dev/null; do
-    sleep 5
-done
-WRAPPER_EOF
-    chmod +x "$WRAPPER_SCRIPT"
-    info "已生成 wrapper 脚本: ${WRAPPER_SCRIPT}"
-
-    if [[ "$IS_ROOT" == "true" ]]; then
-        cat > "$SERVICE_FILE" << EOF
-[Unit]
-Description=CodeBuddy Code - Personal AI Assistant
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=root
-Environment=HOME=/root
-Environment=PATH=${CODEBUDDY_BIN%/*}:${NODE_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=CODEBUDDY_WECOM_BOT_ID=${BOT_ID}
-Environment=CODEBUDDY_WECOM_BOT_SECRET=${BOT_SECRET}
-WorkingDirectory=${WORK_DIR}
-ExecStart=${WRAPPER_SCRIPT}
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-        systemctl daemon-reload
-        systemctl enable "${SERVICE_NAME}"
-        # 先测试服务配置是否合法
-        if systemctl start "${SERVICE_NAME}" 2>/dev/null; then
-            info "服务启动成功"
-        else
-            JOURNAL=$(journalctl -u "${SERVICE_NAME}" --no-pager -n 10 2>/dev/null)
-            warn "服务启动失败，尝试排查..."
-            echo "$JOURNAL" | tail -5
-            # 常见修复：如果路径含 nvm，尝试用 node 绝对路径
-            if [[ "$CODEBUDDY_BIN" == *"/.nvm/"* ]]; then
-                warn "检测到 nvm 环境，systemd 可能无法加载 nvm 路径"
-                warn "建议将 ExecStart 中的 codebuddy 替换为绝对路径: ${CODEBUDDY_BIN}"
-                warn "服务文件: ${SERVICE_FILE}"
-            fi
-        fi
-        info "systemd 服务已创建并启用"
-        info "  启动: systemctl start ${SERVICE_NAME}"
-        info "  停止: systemctl stop ${SERVICE_NAME}"
-        info "  日志: journalctl -u ${SERVICE_NAME} -f"
+# CodeBuddy tmux aliases
+cbc() {
+    if tmux has-session -t codebuddy 2>/dev/null; then
+        tmux attach -t codebuddy
     else
-        cat > "$SERVICE_FILE" << EOF
-[Unit]
-Description=CodeBuddy Code - Personal AI Assistant
-After=network-online.target
-
-[Service]
-Type=simple
-Environment=CODEBUDDY_WECOM_BOT_ID=${BOT_ID}
-Environment=CODEBUDDY_WECOM_BOT_SECRET=${BOT_SECRET}
-Environment=PATH=${CODEBUDDY_BIN%/*}:${NODE_BIN}:/usr/local/bin:/usr/bin:/bin
-WorkingDirectory=${WORK_DIR}
-ExecStart=${WRAPPER_SCRIPT}
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=default.target
-EOF
-
-        systemctl --user daemon-reload
-        systemctl --user enable "${SERVICE_NAME}"
-        if systemctl --user start "${SERVICE_NAME}" 2>/dev/null; then
-            info "服务启动成功"
-        else
-            JOURNAL=$(journalctl --user -u "${SERVICE_NAME}" --no-pager -n 10 2>/dev/null)
-            warn "服务启动失败"
-            echo "$JOURNAL" | tail -5
-        fi
-        info "用户级 systemd 服务已创建并启用"
-        info "  启动: systemctl --user start ${SERVICE_NAME}"
-        info "  停止: systemctl --user stop ${SERVICE_NAME}"
-        info "  日志: journalctl --user -u ${SERVICE_NAME} -f"
-        # 确保 loginctl enable-linger 让用户服务在退出后继续运行
-        if command -v loginctl &>/dev/null; then
-            loginctl enable-linger "$(whoami)" 2>/dev/null || warn "无法设置 linger，服务可能在注销后停止"
-        fi
+        tmux new-session -s codebuddy codebuddy
     fi
+}
+cbc-stop() {
+    tmux kill-session -t codebuddy 2>/dev/null && echo "CodeBuddy 会话已关闭" || echo "没有运行中的 CodeBuddy 会话"
+}
+ALIAS_EOF
+    info "已写入别名到 ${SHELL_RC}"
 else
-    warn "跳过后台服务创建"
+    warn "未找到 .bashrc 或 .zshrc，跳过别名配置"
+    warn "可手动添加别名到你的 shell 配置文件"
 fi
+
+info "tmux 快捷别名已配置："
+info "  cbc       启动或连接 CodeBuddy（tmux 后台运行）"
+info "  cbc-stop  关闭 CodeBuddy 会话"
+info "  分离会话: 按 Ctrl+B 然后按 D（不是 Ctrl+D）"
 
 # ========== Step 5: 安装 init-setup Skill ==========
 echo ""
