@@ -62,7 +62,7 @@ done
 MODE="${1:-}"
 
 case "$MODE" in
-    --help|-h|"")
+    --help|-h)
         cat << 'HELP'
 用法: bash setup.sh [选项]
 
