@@ -148,7 +148,6 @@ case "$MODE" in
         set_installed_version "$(date +%Y%m%d-%H%M%S)"
 
         # 完成提示
-        local shell_rc
         shell_rc=$(detect_shell_rc)
         echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
         echo -e "${GREEN}║     配置完成!                            ║${NC}"
