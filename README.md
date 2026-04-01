@@ -206,11 +206,18 @@ curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/kyeo-hub/setup-c
 
 ### 服务启动后如何连接企微？
 
-服务启动后会自动执行 `/remote-control`，打开交互面板。如果是新安装，需要 SSH 到服务器，通过 `tmux attach` 或直接终端操作来选择 `wecom-bot` 连接。
+服务通过 wrapper 脚本自动启动 CodeBuddy 并连接企微机器人（内部使用 tmux + send-keys 自动操作 /remote-control 面板）。
+
+```bash
+# 如果自动连接未成功，可以手动操作 tmux 会话
+sudo tmux attach -t codebuddy
+# 在面板中选择 wecom-bot，按 Enter 连接
+# 按 Ctrl+B 然后按 D 脱离 tmux
+```
 
 ### 服务器重启后需要重新连接吗？
 
-是的，`/remote-control` 连接状态是临时的。重启后服务会自动启动，但需要再次在面板中选择 `wecom-bot` 连接。连接后会自动恢复企微通信。
+不需要，服务重启后会自动重新执行连接流程。如果网络较慢导致自动连接失败，可手动 attach tmux 会话操作。
 
 ### 如何查看 Bot 是否正常工作？
 

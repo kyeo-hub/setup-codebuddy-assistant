@@ -227,6 +227,30 @@ if [[ "$CREATE_SERVICE" == "y" || "$CREATE_SERVICE" == "Y" ]]; then
     fi
     NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
+    # 生成 wrapper 脚本（通过 tmux + send-keys 自动连接企微机器人）
+    WRAPPER_SCRIPT="/usr/local/bin/codebuddy-wecom-wrapper.sh"
+    cat > "$WRAPPER_SCRIPT" << WRAPPER_EOF
+#!/bin/bash
+# CodeBuddy 企业微信机器人自动连接 wrapper
+# 通过 tmux 提供伪终端，自动在 /remote-control 面板中连接 wecom-bot
+
+SESSION="codebuddy"
+
+# 清理可能残留的 tmux 会话
+tmux kill-session -t "\$SESSION" 2>/dev/null
+
+# 在 tmux 中启动 codebuddy（/remote-control 打开交互面板）
+tmux new-session -d -s "\$SESSION" "${CODEBUDDY_BIN} -c '/remote-control'"
+
+# 等待面板加载
+sleep 5
+
+# 发送 Enter 键，自动选择并连接 wecom-bot
+tmux send-keys Enter -t "\$SESSION"
+WRAPPER_EOF
+    chmod +x "$WRAPPER_SCRIPT"
+    info "已生成 wrapper 脚本: ${WRAPPER_SCRIPT}"
+
     if [[ "$IS_ROOT" == "true" ]]; then
         cat > "$SERVICE_FILE" << EOF
 [Unit]
@@ -235,14 +259,16 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=forking
 User=root
 Environment=HOME=/root
 Environment=PATH=${CODEBUDDY_BIN%/*}:${NODE_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=CODEBUDDY_WECOM_BOT_ID=${BOT_ID}
 Environment=CODEBUDDY_WECOM_BOT_SECRET=${BOT_SECRET}
 WorkingDirectory=${WORK_DIR}
-ExecStart=${CODEBUDDY_BIN} -c "/remote-control wecom start"
+ExecStart=${WRAPPER_SCRIPT}
+ExecStop=/usr/bin/tmux kill-session -t codebuddy
+KillMode=control-group
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -279,12 +305,14 @@ Description=CodeBuddy Code - Personal AI Assistant
 After=network-online.target
 
 [Service]
-Type=simple
+Type=forking
 Environment=CODEBUDDY_WECOM_BOT_ID=${BOT_ID}
 Environment=CODEBUDDY_WECOM_BOT_SECRET=${BOT_SECRET}
 Environment=PATH=${CODEBUDDY_BIN%/*}:${NODE_BIN}:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=${WORK_DIR}
-ExecStart=${CODEBUDDY_BIN} -c "/remote-control wecom start"
+ExecStart=${WRAPPER_SCRIPT}
+ExecStop=/usr/bin/tmux kill-session -t codebuddy
+KillMode=control-group
 Restart=always
 RestartSec=10
 
