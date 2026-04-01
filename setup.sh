@@ -148,43 +148,43 @@ case "$MODE" in
             done
 
             # 执行选择
-            if [[ ${selected[1]} || ${selected[7]} ]]; then
+            if [[ ${selected[1]:-} || ${selected[7]:-} ]]; then
                 check_system
                 echo ""
             fi
 
-            if [[ ${selected[2]} || ${selected[7]} ]]; then
+            if [[ ${selected[2]:-} || ${selected[7]:-} ]]; then
                 install_deps
                 echo ""
             fi
 
-            if [[ ${selected[3]} || ${selected[7]} ]]; then
+            if [[ ${selected[3]:-} || ${selected[7]:-} ]]; then
                 install_codebuddy
                 echo ""
             fi
 
-            if [[ ${selected[4]} || ${selected[7]} ]]; then
+            if [[ ${selected[4]:-} || ${selected[7]:-} ]]; then
                 config_all
                 echo ""
             fi
 
-            if [[ ${selected[5]} || ${selected[7]} ]]; then
+            if [[ ${selected[5]:-} || ${selected[7]:-} ]]; then
                 setup_aliases
                 echo ""
             fi
 
-            if [[ ${selected[6]} || ${selected[7]} ]]; then
+            if [[ ${selected[6]:-} || ${selected[7]:-} ]]; then
                 setup_skill
                 echo ""
             fi
 
             # 备份标记（如果执行了安装或配置）
-            if [[ ${selected[3]} || ${selected[4]} || ${selected[5]} || ${selected[6]} || ${selected[7]} ]]; then
+            if [[ ${selected[3]:-} || ${selected[4]:-} || ${selected[5]:-} || ${selected[6]:-} || ${selected[7]:-} ]]; then
                 set_installed_version "$(date +%Y%m%d-%H%M%S)"
             fi
 
             # 完成提示
-            if [[ ${selected[7]} ]]; then
+            if [[ ${selected[7]:-} ]]; then
                 shell_rc=$(detect_shell_rc)
                 echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
                 echo -e "${GREEN}║     配置完成!                            ║${NC}"
