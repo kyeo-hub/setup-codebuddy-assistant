@@ -1,17 +1,26 @@
 #!/usr/bin/env bash
 #
 # CodeBuddy 个人助理一键配置脚本
-# 用法: bash setup-codebuddy-assistant.sh
-#
-# 功能:
-#   1. 配置企微机器人环境变量
-#   2. 创建身份设定 CODEBUDDY.md
-#   3. 启用 Auto Memory 和 Typed Memory
-#   4. 设置语言偏好为简体中文
-#   5. 创建 systemd 后台服务
-#   6. 安装 /init-setup Skill (用于后续通过 CodeBuddy 交互式调整配置)
+# 用法:
+#   bash setup-codebuddy-assistant.sh          # 完整安装配置
+#   bash setup-codebuddy-assistant.sh --update  # 一键更新 wrapper 脚本并重启服务
+#   bash setup-codebuddy-assistant.sh --uninstall # 一键卸载（清理服务和 wrapper）
 #
 set -euo pipefail
+
+# ========== 参数解析 ==========
+MODE="install"
+if [[ "${1:-}" == "--update" ]]; then
+    MODE="update"
+elif [[ "${1:-}" == "--uninstall" ]]; then
+    MODE="uninstall"
+elif [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    echo "用法:"
+    echo "  bash $0            完整安装配置"
+    echo "  bash $0 --update   一键更新 wrapper 脚本并重启服务"
+    echo "  bash $0 --uninstall 一键卸载（清理服务和 wrapper）"
+    exit 0
+fi
 
 # ========== 颜色 ==========
 RED='\033[0;31m'
@@ -25,11 +34,136 @@ warn()    { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error()   { echo -e "${RED}[ERROR]${NC} $*"; die; }
 die()     { echo -e "${RED}配置中断，请重新运行脚本。${NC}"; exit 1; }
 
+# ========== 卸载模式 ==========
+if [[ "$MODE" == "uninstall" ]]; then
+    info "开始卸载 CodeBuddy 服务..."
+
+    SERVICE_NAME="codebuddy"
+    WRAPPER_SCRIPT="/usr/local/bin/codebuddy-wecom-wrapper.sh"
+
+    # 停止并删除 systemd 服务
+    if [[ "$(id -u)" -eq 0 ]]; then
+        SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+        if [[ -f "$SERVICE_FILE" ]]; then
+            systemctl stop "${SERVICE_NAME}" 2>/dev/null
+            systemctl disable "${SERVICE_NAME}" 2>/dev/null
+            rm -f "$SERVICE_FILE"
+            systemctl daemon-reload
+            info "已删除 systemd 服务: ${SERVICE_FILE}"
+        else
+            warn "未找到 systemd 服务文件"
+        fi
+    else
+        SERVICE_FILE="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
+        if [[ -f "$SERVICE_FILE" ]]; then
+            systemctl --user stop "${SERVICE_NAME}" 2>/dev/null
+            systemctl --user disable "${SERVICE_NAME}" 2>/dev/null
+            rm -f "$SERVICE_FILE"
+            systemctl --user daemon-reload
+            info "已删除用户级 systemd 服务: ${SERVICE_FILE}"
+        else
+            warn "未找到用户级 systemd 服务文件"
+        fi
+    fi
+
+    # 清理 wrapper 脚本
+    if [[ -f "$WRAPPER_SCRIPT" ]]; then
+        rm -f "$WRAPPER_SCRIPT"
+        info "已删除 wrapper 脚本: ${WRAPPER_SCRIPT}"
+    fi
+
+    # 清理 tmux 会话
+    tmux kill-session -t codebuddy 2>/dev/null && info "已清理 tmux 会话" || true
+
+    # 提示手动清理项
+    echo ""
+    info "卸载完成。以下配置保留未删（如需清理请手动操作）："
+    echo "  - ~/.codebuddy/          (身份设定、记忆、Skill 等)"
+    echo "  - ~/.bashrc 中的环境变量   (CODEBUDDY_WECOM_BOT_ID/SECRET)"
+    echo "  - CodeBuddy 本体          (npm uninstall -g @tencent-ai/codebuddy-code)"
+    exit 0
+fi
+
+# ========== 更新模式 ==========
+if [[ "$MODE" == "update" ]]; then
+    if ! command -v codebuddy &>/dev/null; then
+        error "未找到 codebuddy，请先安装 CodeBuddy Code"
+    fi
+    if ! command -v tmux &>/dev/null; then
+        error "未找到 tmux，请先安装: apt install -y tmux 或 yum install -y tmux"
+    fi
+
+    CODEBUDDY_BIN=$(which codebuddy)
+    CODEBUDDY_BIN=$(readlink -f "$CODEBUDDY_BIN" 2>/dev/null || echo "$CODEBUDDY_BIN")
+
+    SERVICE_NAME="codebuddy"
+    WRAPPER_SCRIPT="/usr/local/bin/codebuddy-wecom-wrapper.sh"
+
+    # 读取现有环境变量
+    if [[ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]]; then
+        BOT_ID=$(grep '^Environment=CODEBUDDY_WECOM_BOT_ID=' /etc/systemd/system/${SERVICE_NAME}.service | sed 's/.*=//')
+        BOT_SECRET=$(grep '^Environment=CODEBUDDY_WECOM_BOT_SECRET=' /etc/systemd/system/${SERVICE_NAME}.service | sed 's/.*=//')
+    elif [[ -f "$HOME/.config/systemd/user/${SERVICE_NAME}.service" ]]; then
+        BOT_ID=$(grep '^Environment=CODEBUDDY_WECOM_BOT_ID=' "$HOME/.config/systemd/user/${SERVICE_NAME}.service" | sed 's/.*=//')
+        BOT_SECRET=$(grep '^Environment=CODEBUDDY_WECOM_BOT_SECRET=' "$HOME/.config/systemd/user/${SERVICE_NAME}.service" | sed 's/.*=//')
+    fi
+    BOT_ID=${BOT_ID:-${CODEBUDDY_WECOM_BOT_ID:-}}
+    BOT_SECRET=${BOT_SECRET:-${CODEBUDDY_WECOM_BOT_SECRET:-}}
+
+    if [[ -z "$BOT_ID" || -z "$BOT_SECRET" ]]; then
+        warn "未找到企微 Bot 凭据，wrapper 将使用环境变量"
+    fi
+
+    # 停止服务
+    if [[ "$(id -u)" -eq 0 ]]; then
+        systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
+    else
+        systemctl --user stop "${SERVICE_NAME}" 2>/dev/null || true
+    fi
+    tmux kill-session -t codebuddy 2>/dev/null || true
+
+    # 重新生成 wrapper 脚本
+    cat > "$WRAPPER_SCRIPT" << WRAPPER_EOF
+#!/bin/bash
+# CodeBuddy 企业微信机器人自动连接 wrapper
+# -c 参数会把内容当聊天消息发给 AI，无法触发 slash 命令
+# 因此直接启动交互模式，通过 send-keys 模拟用户输入
+
+SESSION="codebuddy"
+
+tmux kill-session -t "\$SESSION" 2>/dev/null
+tmux new-session -d -s "\$SESSION" "${CODEBUDDY_BIN}"
+sleep 8
+tmux send-keys "/remote-control" Enter -t "\$SESSION"
+sleep 3
+tmux send-keys Enter -t "\$SESSION"
+trap 'tmux kill-session -t "\$SESSION" 2>/dev/null; exit 0' TERM INT
+while tmux has-session -t "\$SESSION" 2>/dev/null; do
+    sleep 5
+done
+WRAPPER_EOF
+    chmod +x "$WRAPPER_SCRIPT"
+    info "已更新 wrapper 脚本: ${WRAPPER_SCRIPT}"
+
+    # 重启服务
+    if [[ "$(id -u)" -eq 0 ]]; then
+        systemctl start "${SERVICE_NAME}" 2>/dev/null && info "服务已重启" || warn "服务启动失败，请检查 journalctl -u ${SERVICE_NAME} -f"
+    else
+        systemctl --user start "${SERVICE_NAME}" 2>/dev/null && info "服务已重启" || warn "服务启动失败，请检查 journalctl --user -u ${SERVICE_NAME} -f"
+    fi
+    exit 0
+fi
+
+# ========== 完整安装模式 ==========
 # ========== 前置检查 ==========
 info "正在检查环境..."
 
 if ! command -v codebuddy &>/dev/null; then
     error "未找到 codebuddy，请先安装 CodeBuddy Code"
+fi
+
+if ! command -v tmux &>/dev/null; then
+    error "未找到 tmux，请先安装: apt install -y tmux 或 yum install -y tmux"
 fi
 
 CODEBUDDY_BIN=$(which codebuddy)

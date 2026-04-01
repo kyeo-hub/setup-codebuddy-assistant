@@ -202,6 +202,22 @@ sudo systemctl restart codebuddy
 curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main/setup-codebuddy-assistant.sh | bash
 ```
 
+## 一键更新
+
+当脚本更新后，在远端重新拉取执行即可，已有配置不会被覆盖：
+
+```bash
+# 重新生成 wrapper 脚本并重启服务（跳过交互配置）
+bash <(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main/setup-codebuddy-assistant.sh) --update
+```
+
+## 一键卸载
+
+```bash
+# 清理 systemd 服务、wrapper 脚本和 tmux 会话（保留 ~/.codebuddy 配置）
+bash <(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main/setup-codebuddy-assistant.sh) --uninstall
+```
+
 ## 常见问题
 
 ### 服务启动后如何连接企微？
