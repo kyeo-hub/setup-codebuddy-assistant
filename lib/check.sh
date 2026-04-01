@@ -63,7 +63,7 @@ _check_existing_deps() {
     fi
 
     # 检查 SSH 环境（非交互判断）
-    if [[ -n "$SSH_CONNECTION" ]]; then
+    if [[ -n "${SSH_CONNECTION:-}" ]]; then
         info "SSH 会话: 是"
     else
         info "SSH 会话: 否"
