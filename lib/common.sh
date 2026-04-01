@@ -44,18 +44,6 @@ detect_shell_rc() {
     fi
 }
 
-# ========== lib 加载 ==========
-_CBC_LIB_DIR=""
-
-load_lib() {
-    # 优先使用本地 lib/ 目录
-    local script_dir
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
-    if [[ -d "$script_dir/lib" ]]; then
-        _CBC_LIB_DIR="$script_dir/lib"
-    fi
-}
-
 # ========== 交互确认 ==========
 confirm() {
     local prompt="$1"

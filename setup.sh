@@ -12,28 +12,51 @@
 #
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LIB_DIR="${SCRIPT_DIR}/lib"
+# ========== lib 加载 ==========
+GITHUB_RAW="https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main"
+GITHUB_PROXY="https://ghfast.top/https://raw.githubusercontent.com/kyeo-hub/setup-codebuddy-assistant/main"
+LIB_MODULES="common check install-deps install-codebuddy config aliases skill upgrade uninstall health backup"
 
-# 加载公共模块
-if [[ -f "$LIB_DIR/common.sh" ]]; then
-    source "$LIB_DIR/common.sh"
-else
-    echo "[ERROR] 找不到 lib/common.sh，请确认在项目目录下运行"
-    exit 1
-fi
+_resolve_lib_dir() {
+    # 尝试本地 lib/ 目录
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || true
+    if [[ -n "$script_dir" && -f "$script_dir/lib/common.sh" ]]; then
+        echo "$script_dir/lib"
+        return 0
+    fi
 
-# 加载其余模块
-source "$LIB_DIR/check.sh"
-source "$LIB_DIR/install-deps.sh"
-source "$LIB_DIR/install-codebuddy.sh"
-source "$LIB_DIR/config.sh"
-source "$LIB_DIR/aliases.sh"
-source "$LIB_DIR/skill.sh"
-source "$LIB_DIR/upgrade.sh"
-source "$LIB_DIR/uninstall.sh"
-source "$LIB_DIR/health.sh"
-source "$LIB_DIR/backup.sh"
+    # 远程模式：下载到临时目录
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    local base_url
+
+    if curl -fsSL --connect-timeout 5 "${GITHUB_PROXY}/lib/common.sh" -o "${tmp_dir}/common.sh" 2>/dev/null; then
+        base_url="$GITHUB_PROXY"
+    elif curl -fsSL --connect-timeout 10 "${GITHUB_RAW}/lib/common.sh" -o "${tmp_dir}/common.sh" 2>/dev/null; then
+        base_url="$GITHUB_RAW"
+    else
+        echo "" >&2
+        echo "[ERROR] 无法下载模块文件，请检查网络或手动克隆仓库：" >&2
+        echo "  git clone git@github.com:kyeo-hub/setup-codebuddy-assistant.git" >&2
+        echo "  cd setup-codebuddy-assistant && bash setup.sh" >&2
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+
+    local module
+    for module in $LIB_MODULES; do
+        curl -fsSL "${base_url}/lib/${module}.sh" -o "${tmp_dir}/${module}.sh" 2>/dev/null || true
+    done
+    echo "$tmp_dir"
+}
+
+LIB_DIR=$(_resolve_lib_dir)
+
+# 加载所有模块
+for module in $LIB_MODULES; do
+    source "${LIB_DIR}/${module}.sh"
+done
 
 # ========== 参数解析 ==========
 MODE="${1:-}"
