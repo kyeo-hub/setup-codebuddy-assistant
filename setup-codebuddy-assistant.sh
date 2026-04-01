@@ -247,6 +247,14 @@ sleep 5
 
 # 发送 Enter 键，自动选择并连接 wecom-bot
 tmux send-keys Enter -t "\$SESSION"
+
+# 收到 SIGTERM 时清理 tmux 会话并退出
+trap 'tmux kill-session -t "\$SESSION" 2>/dev/null; exit 0' TERM INT
+
+# 保持 wrapper 运行，等待 tmux 会话结束
+while tmux has-session -t "\$SESSION" 2>/dev/null; do
+    sleep 5
+done
 WRAPPER_EOF
     chmod +x "$WRAPPER_SCRIPT"
     info "已生成 wrapper 脚本: ${WRAPPER_SCRIPT}"
@@ -259,7 +267,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=forking
+Type=simple
 User=root
 Environment=HOME=/root
 Environment=PATH=${CODEBUDDY_BIN%/*}:${NODE_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -267,8 +275,6 @@ Environment=CODEBUDDY_WECOM_BOT_ID=${BOT_ID}
 Environment=CODEBUDDY_WECOM_BOT_SECRET=${BOT_SECRET}
 WorkingDirectory=${WORK_DIR}
 ExecStart=${WRAPPER_SCRIPT}
-ExecStop=/usr/bin/tmux kill-session -t codebuddy
-KillMode=control-group
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -305,14 +311,12 @@ Description=CodeBuddy Code - Personal AI Assistant
 After=network-online.target
 
 [Service]
-Type=forking
+Type=simple
 Environment=CODEBUDDY_WECOM_BOT_ID=${BOT_ID}
 Environment=CODEBUDDY_WECOM_BOT_SECRET=${BOT_SECRET}
 Environment=PATH=${CODEBUDDY_BIN%/*}:${NODE_BIN}:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=${WORK_DIR}
 ExecStart=${WRAPPER_SCRIPT}
-ExecStop=/usr/bin/tmux kill-session -t codebuddy
-KillMode=control-group
 Restart=always
 RestartSec=10
 
