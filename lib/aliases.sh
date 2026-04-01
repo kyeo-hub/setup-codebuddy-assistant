@@ -12,6 +12,11 @@ setup_aliases() {
         return 0
     fi
 
+    if [[ ! -f "$shell_rc" ]]; then
+        info "未找到 ${shell_rc}，已创建"
+        touch "$shell_rc"
+    fi
+
     # 清理旧别名
     sed -i '/^# CodeBuddy tmux aliases$/d' "$shell_rc"
     sed -i '/^cbc() {$/,/^}$/d' "$shell_rc"

@@ -29,6 +29,10 @@ config_env() {
     local shell_rc
     shell_rc=$(detect_shell_rc)
     if [[ -n "$shell_rc" ]]; then
+        if [[ ! -f "$shell_rc" ]]; then
+            info "未找到 ${shell_rc}，已创建"
+            touch "$shell_rc"
+        fi
         # 清理旧配置
         sed -i '/^export CODEBUDDY_WECOM_BOT_ID=/d' "$shell_rc"
         sed -i '/^export CODEBUDDY_WECOM_BOT_SECRET=/d' "$shell_rc"
