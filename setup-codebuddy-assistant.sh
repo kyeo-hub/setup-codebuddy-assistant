@@ -242,7 +242,7 @@ Environment=PATH=${CODEBUDDY_BIN%/*}:${NODE_BIN}:/usr/local/sbin:/usr/local/bin:
 Environment=CODEBUDDY_WECOM_BOT_ID=${BOT_ID}
 Environment=CODEBUDDY_WECOM_BOT_SECRET=${BOT_SECRET}
 WorkingDirectory=${WORK_DIR}
-ExecStart=${CODEBUDDY_BIN} -c "/remote-control"
+ExecStart=${CODEBUDDY_BIN} -c "/remote-control wecom start"
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -284,7 +284,7 @@ Environment=CODEBUDDY_WECOM_BOT_ID=${BOT_ID}
 Environment=CODEBUDDY_WECOM_BOT_SECRET=${BOT_SECRET}
 Environment=PATH=${CODEBUDDY_BIN%/*}:${NODE_BIN}:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=${WORK_DIR}
-ExecStart=${CODEBUDDY_BIN} -c "/remote-control"
+ExecStart=${CODEBUDDY_BIN} -c "/remote-control wecom start"
 Restart=always
 RestartSec=10
 
