@@ -79,7 +79,7 @@ cbc-stop       # 关闭 CodeBuddy 会话
 
 - 如果已有运行中的 `codebuddy` tmux 会话，`cbc` 会直接连接
 - 如果没有，`cbc` 会创建新会话并启动 codebuddy
-- **分离会话**: 按 `Ctrl+B` 然后按 `D`（不要按 Ctrl+D，那会终止进程）
+- **分离会话**: 直接按 `F12`（不要按 Ctrl+D，那会终止进程）
 
 ### 连接企微
 
@@ -185,9 +185,11 @@ cbc            # 连接 CodeBuddy，检查 /remote-control 连接状态
 
 | 操作 | 快捷键 |
 |------|--------|
-| 分离会话（后台运行） | `Ctrl+B` 然后按 `D` |
+| 分离会话（后台运行） | 直接按 `F12` |
 | 重新连接 | `cbc` 或 `tmux attach -t codebuddy` |
 | 关闭会话 | `cbc-stop` |
+
+> codebuddy 的 TUI 界面会拦截 `Ctrl+B`，所以 tmux 默认的分离快捷键不可用。`cbc` 别名已将 `F12` 绑定为直接分离键。
 
 ## License
 

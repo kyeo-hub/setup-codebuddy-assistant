@@ -110,7 +110,7 @@ cbc() {
     if tmux has-session -t codebuddy 2>/dev/null; then
         tmux attach -t codebuddy
     else
-        tmux new-session -s codebuddy codebuddy
+        tmux new-session -s codebuddy codebuddy \; bind-key -n F12 detach
     fi
 }
 cbc-stop() {
@@ -343,7 +343,7 @@ cbc() {
     if tmux has-session -t codebuddy 2>/dev/null; then
         tmux attach -t codebuddy
     else
-        tmux new-session -s codebuddy codebuddy
+        tmux new-session -s codebuddy codebuddy \; bind-key -n F12 detach
     fi
 }
 cbc-stop() {
@@ -359,7 +359,7 @@ fi
 info "tmux 快捷别名已配置："
 info "  cbc       启动或连接 CodeBuddy（tmux 后台运行）"
 info "  cbc-stop  关闭 CodeBuddy 会话"
-info "  分离会话: 按 Ctrl+B 然后按 D（不是 Ctrl+D）"
+info "  分离会话: 直接按 F12（codebuddy 会拦截 Ctrl+B，所以用 F12 替代）"
 
 # ========== Step 5: 安装 init-setup Skill ==========
 echo ""
